@@ -240,6 +240,20 @@ class KeyManager(object):
         # prepare the public key bound to address
         pubkey = self.get_key(
             self._address, ktype, private=False, fetch_remote=False)
+
+        # verify if key already exists in server
+        res = self._get(self._nickserver_uri, {'address': self._address})
+        if res.status_code == 200:  # keys found for this address
+            json_res = res.json()
+            if self.OPENPGP_KEY in json_res:
+                with self._wrapper_map[OpenPGPKey]._temporary_gpgwrapper() \
+                        as gpg:
+                    gpg.import_keys(json_res[self.OPENPGP_KEY])
+                    if gpg.list_keys().pop()['keyid'] == pubkey.key_id:
+                        # key exists in server, so there's no need to send.
+                        return
+
+        # actually send key
         data = {
             self.PUBKEY_KEY: pubkey.key_data
         }
